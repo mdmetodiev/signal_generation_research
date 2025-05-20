@@ -1,0 +1,8 @@
+learn_donchian.py
+*.html
+model_performance_*
+log.txt
+__pycache__
+*.pickle
+pyrightconfig.json
+data/*.csv
