@@ -5,5 +5,5 @@ log.txt
 __pycache__
 *.pickle
 pyrightconfig.json
-data/*.csv
+#data/*.csv
 test.ipynb
