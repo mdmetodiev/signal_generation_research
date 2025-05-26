@@ -1,10 +1,43 @@
 #! ~/anaconda3/bin/python
 
+
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 import utils
 import learn
-from typing import Tuple, List
+from typing import Tuple, Any
+
+from sklearn.decomposition import PCA
+
+from sklearn.metrics import f1_score
+
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import accuracy_score
+import matplotlib.pyplot as plt
+import numpy as np
+
+from sklearn.metrics import classification_report
+
+
+class BinaryClassifier(nn.Module):
+    def __init__(self, input_dim):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(input_dim, 64),
+            nn.ReLU(),
+            nn.Linear(64, 32),
+            nn.ReLU(),
+            nn.Linear(32, 1),
+            # nn.Sigmoid()
+        )
+    def forward(self, x):
+        return self.net(x)
+
 
 
 def create_blocks(series, block_size):
@@ -54,43 +87,22 @@ def compute_returns(
 
 
 def run_mc(
-    df_trading: pd.DataFrame,
+    df: pd.DataFrame,
     train_period: pd.DateOffset,
     test_period: pd.DateOffset,
+    N:int,
+    npca:int=2,
     n_samples: int = 500,
     block_size: int = 20,
 ):
+    df.index = pd.to_datetime(df["time"].values)
+    p0 = df["close"][0]
 
-    p0 = df_trading["close"][0]
-
-    surrogates = [
-        generate_bootstrap_series(df_trading["log_ret"], block_size, seed=i)
-        for i in range(n_samples)
-    ]
 
     profit_ratios = []
     sharpe_ratios = []
     sim_return = []
 
-    for i, sample in enumerate(surrogates):
-
-        sample.columns = ["log_ret"]
-        sample["time"] = df_trading["time"]
-
-        sample["close"] = p0 * np.exp(np.cumsum((sample["log_ret"])))
-        sample = utils.add_rsis(sample)
-
-        _, _, trading_sim = learn.walk_forward(
-            sample, train_period, test_period, N=2, qmin=0.025, qmax=0.975
-        )
-
-        _my_ret, _pr, _sharpe = compute_returns(trading_sim)
-
-        sim_return.append(_my_ret)
-        profit_ratios.append(_pr)
-        sharpe_ratios.append(_sharpe)
-
-        if i % 50 == 0:
-            print(f"Simulation num: {i}, profit ratio: {_pr},  sharpe ratio: {_sharpe}")
-
-    return sim_return, profit_ratios, sharpe_ratios
+    for i in range(n_samples):
+        pass
+    

@@ -149,6 +149,8 @@ def start_trading(current_hour, df):
     upper_q = new_model["uq"]
     lower_q = new_model["lq"]
 
+    now = None
+
     current_hour = datetime.now().hour
     try:
         while True:
@@ -185,6 +187,7 @@ def start_trading(current_hour, df):
                 X_features = utils.get_features_matrix(df_new)
 
                 X_last = X_features.iloc[-1].values
+                X_last = np.array(X_last)
                 X_last_emb = new_model["pca"].transform(X_last.reshape(1, -1))
                 mod_value = new_model["regressor"].predict(X_last_emb)[0]
                 model_performance["model_hourly_values"].append(mod_value)
@@ -225,15 +228,16 @@ def start_trading(current_hour, df):
 
     except KeyboardInterrupt:
 
-        print("\nStopped by user.")
-        print(f"Total closing prices collected: {len(closing_prices)}")
-        _now = str(now).replace(" ", "_").replace(":", "_").replace(".", "_")
-        _filename = f"model_performance_{_now}"
+        if now:
+            print("\nStopped by user.")
+            print(f"Total closing prices collected: {len(closing_prices)}")
+            _now = str(now).replace(" ", "_").replace(":", "_").replace(".", "_")
+            _filename = f"model_performance_{_now}"
 
-        with open(_filename, "wb") as handle:
-            pickle.dump(model_performance, handle, protocol=pickle.HIGHEST_PROTOCOL)
+            with open(_filename, "wb") as handle:
+                pickle.dump(model_performance, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-        print(f"model performance dumped here : {_filename}")
+            print(f"model performance dumped here : {_filename}")
 
 
 if __name__ == "__main__":

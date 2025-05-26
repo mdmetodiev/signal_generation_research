@@ -41,6 +41,48 @@ def compute_returns(
 
     return my_ret, pr, sharpe
 
+def compute_returns_nn(
+    df_trading: pd.DataFrame, cost: float = 0.001, thr:float = 0.005
+): 
+
+    signal = df_trading["raw_signal"]
+    pct_change = df_trading["close"].pct_change()
+    next_r = df_trading["log_ret"].shift(-1)
+    trade_signal = np.zeros_like(signal)
+    trade_signal = np.zeros_like(signal)
+    in_trade = False
+    entry_index = None
+
+    for i in range(1, len(signal)):
+        if not in_trade and signal[i] == 1 and signal[i - 1] == 0:
+            # Start trade
+            in_trade = True
+            trade_signal[i] = 1
+        elif in_trade:
+            if signal[i] == 0:
+                # End of signal block
+                in_trade = False
+            elif pct_change[i] >= thr:
+                # Exit due to threshold breach
+                trade_signal[i] = 1
+                in_trade = False
+            else:
+                # Continue trade
+                trade_signal[i] = 1
+
+    trade_signal = pd.DataFrame({"trade_signal":trade_signal})
+    position_change = (
+        signal.diff().abs().fillna(0)
+    )  # First row has no previous position
+
+    my_ret = next_r * signal - position_change * cost
+
+    pr = np.nansum(my_ret[my_ret > 0]) / np.abs(np.nansum(my_ret[my_ret < 0]))
+    sharpe = np.nanmean(my_ret.dropna()) / np.nanstd(my_ret.dropna(), ddof=1)
+
+    return my_ret, pr, sharpe, trade_signal
+        
+
 
 def compute_win_ratio(signal, log_return, horizon=4):
     trades = []
@@ -84,8 +126,8 @@ def add_mas(df: pd.DataFrame, windows: List[int] | np.ndarray = np.arange(2, 25)
         df["log_ret"] = np.log(df["close"]).diff()
 
     for window_length in windows:
-        df[f"means_{window_length}"] = df["log_ret"].rolling(window_length).mean()
-        df[f"std_{window_length}"] = df["log_ret"].rolling(window_length).std(ddof=1)
+        df[f"means_{window_length}"] = df["close"].rolling(window_length).mean()
+        df[f"std_{window_length}"] = df["close"].rolling(window_length).std(ddof=1)
 
     return df
 
@@ -99,6 +141,16 @@ def add_rsis(df: pd.DataFrame, windows: List[int] | np.ndarray = np.arange(2, 25
         df[f"rsi_{window_length}"] = ta.rsi(df["close"], length=window_length)
 
     return df
+
+# def add_rsis(df: pd.DataFrame, windows: List[int] | np.ndarray = np.arange(2, 25)):
+
+#     if "log_ret" not in df.columns:
+#         df["log_ret"] = np.log(df["close"]).diff()
+
+#     for window_length in windows:
+#         df[f"rsi_{window_length}"] = ta.rsi(df["close"], length=window_length)
+
+#     return df
 
 
 def get_features_names(df: pd.DataFrame) -> List[str]:
