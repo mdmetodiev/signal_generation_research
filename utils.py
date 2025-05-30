@@ -41,9 +41,10 @@ def compute_returns(
 
     return my_ret, pr, sharpe
 
+
 def compute_returns_nn(
-    df_trading: pd.DataFrame, cost: float = 0.001, thr:float = 0.005
-): 
+    df_trading: pd.DataFrame, cost: float = 0.001, thr: float = 0.005
+):
 
     signal = df_trading["raw_signal"]
     pct_change = df_trading["close"].pct_change()
@@ -70,7 +71,7 @@ def compute_returns_nn(
                 # Continue trade
                 trade_signal[i] = 1
 
-    trade_signal = pd.DataFrame({"trade_signal":trade_signal})
+    trade_signal = pd.DataFrame({"trade_signal": trade_signal})
     position_change = (
         signal.diff().abs().fillna(0)
     )  # First row has no previous position
@@ -81,7 +82,6 @@ def compute_returns_nn(
     sharpe = np.nanmean(my_ret.dropna()) / np.nanstd(my_ret.dropna(), ddof=1)
 
     return my_ret, pr, sharpe, trade_signal
-        
 
 
 def compute_win_ratio(signal, log_return, horizon=4):
@@ -141,6 +141,7 @@ def add_rsis(df: pd.DataFrame, windows: List[int] | np.ndarray = np.arange(2, 25
         df[f"rsi_{window_length}"] = ta.rsi(df["close"], length=window_length)
 
     return df
+
 
 # def add_rsis(df: pd.DataFrame, windows: List[int] | np.ndarray = np.arange(2, 25)):
 

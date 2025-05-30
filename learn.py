@@ -47,7 +47,7 @@ def train_rf(
     # X_emb = scaler.fit_transform(X_emb)
 
     # X_emb = np.cumsum(X_emb, axis=0)
-    
+
     # print("using cumulative sum")
     # Initialize and train model
     model = RandomForestRegressor(
@@ -68,11 +68,10 @@ def generate_signals(
     signal = np.zeros(len(df))
 
     assert len(signal[:-N]) == len(y_pred)
-    
+
     # Apply quantile cuts
     up_q = float(np.quantile(y_pred, qmax))
     low_q = float(np.quantile(y_pred, qmin))
-
 
     long_args = np.where(y_pred > up_q)[0]
     short_args = np.where(y_pred < low_q)[0]
@@ -135,7 +134,7 @@ def walk_forward(
 
         X_train = utils.get_features_matrix(df_train)
 
-        y_train = np.log(df_train["close"].shift(-N)/df_train["close"])
+        y_train = np.log(df_train["close"].shift(-N) / df_train["close"])
         y_train = y_train.dropna()
 
         X_train = X_train.iloc[:-N]
@@ -149,8 +148,9 @@ def walk_forward(
         pca = PCA(n_components=npca)
         X_emb_train = pca.fit_transform(X_train_zstd)
 
-
-        model = RandomForestRegressor(n_estimators=300, min_samples_leaf=1, n_jobs=-1, random_state=42)
+        model = RandomForestRegressor(
+            n_estimators=300, min_samples_leaf=1, n_jobs=-1, random_state=42
+        )
         model.fit(X_emb_train, y_train_aligned)
 
         if verbose:
@@ -162,15 +162,14 @@ def walk_forward(
         X_test_clean = X_test.dropna()
         test_idx = X_test_clean.index
 
-        y_test = np.log(df_test["close"].shift(-N)/df_test["close"])
+        y_test = np.log(df_test["close"].shift(-N) / df_test["close"])
         y_test = y_test.loc[test_idx]  # Ensure alignment
-
 
         scaler = StandardScaler()
         X_test_zstd = scaler.fit_transform(X_test_clean)
 
         X_emb_test = pca.transform(X_test_zstd)
-        
+
         y_pred = model.predict(X_emb_test)
 
         signal, up_q, low_q = generate_signals(y_pred, df_test, N, qmin, qmax)
@@ -179,7 +178,7 @@ def walk_forward(
         # signal = utils.generate_positions(signal)
 
         # print("up", up_q)
-        # signal = 
+        # signal =
         current_signals = pd.DataFrame({"signal": signal})
         current_signals = current_signals.rolling(N).mean().fillna(0)
 
@@ -227,7 +226,7 @@ def walk_forward(
     #     for val in res:
     #         r.append(val)
 
-    mod_preds = results_list #np.array(r)
+    mod_preds = results_list  # np.array(r)
 
     t = []
     for sig in all_signals:
@@ -244,5 +243,3 @@ def walk_forward(
     df_trading["signal"] = t
 
     return final_model, mod_preds, y_test_gt, df_trading
-
-

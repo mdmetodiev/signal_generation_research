@@ -24,72 +24,33 @@ from sklearn.metrics import classification_report
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-class LSTMModel(nn.Module):
-    def __init__(self, input_dim, hidden_dim=64, output_dim=1, num_layers=1, dropout=0.2):
+class LSTMReg(nn.Module):
+    def __init__(self, input_dim, hidden_dim=64, output_dim=1, num_layers=1, dropout=0.3):
         super().__init__()
         self.lstm = nn.LSTM(
             input_size=input_dim,
             hidden_size=hidden_dim,
             num_layers=num_layers,
             batch_first=True,
-            dropout=dropout if num_layers > 1 else 0  # Dropout only if >1 layer
+            dropout=dropout if num_layers > 1 else 0
         )
         self.dropout = nn.Dropout(dropout)
         self.batchnorm = nn.BatchNorm1d(hidden_dim)
-        self.fc = nn.Linear(hidden_dim, output_dim)
+        self.fc = nn.Sequential(
+            nn.Linear(hidden_dim, 32),
+            nn.Dropout(0.2),
+            nn.ReLU(),
+            nn.Linear(32, output_dim)
+        )
         
     def forward(self, x):
-        # x shape: (batch_size, sequence_length, input_dim)
-        lstm_out, (h_n, c_n) = self.lstm(x)  # lstm_out: (batch_size, seq_len, hidden_dim)
-        # Take the output from the last timestep
+        lstm_out, _ = self.lstm(x)
         last_out = lstm_out[:, -1, :]  # (batch_size, hidden_dim)
         last_out = self.batchnorm(last_out)
         last_out = self.dropout(last_out)
-        output = self.fc(last_out)  # (batch_size, output_dim)
-        # output = torch.sigmoid(output)  # Binary classification
-        return output
+        return self.fc(last_out)
 
 
-# Define model
-class BinaryClassifier(nn.Module):
-    def __init__(self, input_dim):
-        super().__init__()
-        self.net = nn.Sequential(
-        nn.Linear(input_dim, 16),
-        nn.BatchNorm1d(16),
-        nn.ReLU(),
-        nn.Dropout(0.05),
-        
-        nn.Linear(16, 32),
-        nn.BatchNorm1d(32),
-        nn.ReLU(),
-        nn.Dropout(0.05),
-        
-        nn.Linear(32, 64),
-        nn.BatchNorm1d(64),
-        nn.ReLU(),
-        nn.Dropout(0.05),
-
-        nn.Linear(64, 128),
-        nn.BatchNorm1d(128),
-        nn.ReLU(),
-        nn.Dropout(0.05),
-
-        nn.Linear(128, 64),
-        nn.BatchNorm1d(64),
-        nn.ReLU(),
-        nn.Dropout(0.05),
-
-        nn.Linear(64, 32),
-        nn.BatchNorm1d(32),
-        nn.ReLU(),
-        nn.Dropout(0.05),
-        
-        nn.Linear(32, 1)
-            # nn.Sigmoid()  # Only use if you're not using BCEWithLogitsLoss
-        )
-    def forward(self, x):
-        return self.net(x)
 
 
 

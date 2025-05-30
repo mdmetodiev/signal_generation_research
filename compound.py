@@ -24,23 +24,28 @@ from sklearn.metrics import classification_report
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+
 class LSTMModel(nn.Module):
-    def __init__(self, input_dim, hidden_dim=64, output_dim=1, num_layers=1, dropout=0.2):
+    def __init__(
+        self, input_dim, hidden_dim=64, output_dim=1, num_layers=1, dropout=0.2
+    ):
         super().__init__()
         self.lstm = nn.LSTM(
             input_size=input_dim,
             hidden_size=hidden_dim,
             num_layers=num_layers,
             batch_first=True,
-            dropout=dropout if num_layers > 1 else 0  # Dropout only if >1 layer
+            dropout=dropout if num_layers > 1 else 0,  # Dropout only if >1 layer
         )
         self.dropout = nn.Dropout(dropout)
         self.batchnorm = nn.BatchNorm1d(hidden_dim)
         self.fc = nn.Linear(hidden_dim, output_dim)
-        
+
     def forward(self, x):
         # x shape: (batch_size, sequence_length, input_dim)
-        lstm_out, (h_n, c_n) = self.lstm(x)  # lstm_out: (batch_size, seq_len, hidden_dim)
+        lstm_out, (h_n, c_n) = self.lstm(
+            x
+        )  # lstm_out: (batch_size, seq_len, hidden_dim)
         # Take the output from the last timestep
         last_out = lstm_out[:, -1, :]  # (batch_size, hidden_dim)
         last_out = self.batchnorm(last_out)
@@ -55,42 +60,36 @@ class BinaryClassifier(nn.Module):
     def __init__(self, input_dim):
         super().__init__()
         self.net = nn.Sequential(
-        nn.Linear(input_dim, 16),
-        nn.BatchNorm1d(16),
-        nn.ReLU(),
-        nn.Dropout(0.05),
-        
-        nn.Linear(16, 32),
-        nn.BatchNorm1d(32),
-        nn.ReLU(),
-        nn.Dropout(0.05),
-        
-        nn.Linear(32, 64),
-        nn.BatchNorm1d(64),
-        nn.ReLU(),
-        nn.Dropout(0.05),
-
-        nn.Linear(64, 128),
-        nn.BatchNorm1d(128),
-        nn.ReLU(),
-        nn.Dropout(0.05),
-
-        nn.Linear(128, 64),
-        nn.BatchNorm1d(64),
-        nn.ReLU(),
-        nn.Dropout(0.05),
-
-        nn.Linear(64, 32),
-        nn.BatchNorm1d(32),
-        nn.ReLU(),
-        nn.Dropout(0.05),
-        
-        nn.Linear(32, 1)
+            nn.Linear(input_dim, 16),
+            nn.BatchNorm1d(16),
+            nn.ReLU(),
+            nn.Dropout(0.05),
+            nn.Linear(16, 32),
+            nn.BatchNorm1d(32),
+            nn.ReLU(),
+            nn.Dropout(0.05),
+            nn.Linear(32, 64),
+            nn.BatchNorm1d(64),
+            nn.ReLU(),
+            nn.Dropout(0.05),
+            nn.Linear(64, 128),
+            nn.BatchNorm1d(128),
+            nn.ReLU(),
+            nn.Dropout(0.05),
+            nn.Linear(128, 64),
+            nn.BatchNorm1d(64),
+            nn.ReLU(),
+            nn.Dropout(0.05),
+            nn.Linear(64, 32),
+            nn.BatchNorm1d(32),
+            nn.ReLU(),
+            nn.Dropout(0.05),
+            nn.Linear(32, 1),
             # nn.Sigmoid()  # Only use if you're not using BCEWithLogitsLoss
         )
+
     def forward(self, x):
         return self.net(x)
-
 
 
 def continuous_signal(first_array: np.ndarray, N: int) -> np.ndarray:
@@ -111,16 +110,14 @@ def continuous_signal(first_array: np.ndarray, N: int) -> np.ndarray:
     return second_array
 
 
-
-
 def walk_forward_c(
     df: pd.DataFrame,
     train_period: pd.DateOffset = pd.DateOffset(months=6),
     test_period: pd.DateOffset = pd.DateOffset(months=6),
     N: int = 4,
-    ntrain:int=200,
-    continuous:bool=False,
-    cost:float = 1e-2,
+    ntrain: int = 200,
+    continuous: bool = False,
+    cost: float = 1e-2,
     qmin: float = 0.05,
     qmax: float = 0.95,
     npca: int = 2,
@@ -176,7 +173,6 @@ def walk_forward_c(
         pca = PCA(n_components=npca)
         X_emb_train = pca.fit_transform(X_train_zstd)
 
-
         # model = RandomForestRegressor(n_estimators=150, n_jobs=-1, random_state=42)
         # model.fit(X_emb_train, y_train_aligned)
 
@@ -203,56 +199,54 @@ def walk_forward_c(
         # nn_train_tar_args = np.where(y_train_aligned.values>drag.values)[0]
         # nn_train_tar = np.zeros_like(y_train_aligned)
         # nn_train_tar[nn_train_tar_args] = 1
-        
 
         # Standardize features
         scaler = StandardScaler()
         X_scaled = scaler.fit_transform(X_nn_train)
 
-
-        threshold = np.log(1+cost)
+        threshold = np.log(1 + cost)
         log_return = np.log(df_train["close"].shift(-N) / df_train["close"])
         log_return = log_return[:-N]
         const_q = np.quantile(log_return, 0.8)
         profitable = (log_return > const_q).astype(int)
         nn_train_tar = profitable.values
 
-
-        
         sequence_length = 50  # Adjust based on your problem
         X_sequences = []
         y_sequences = []
 
         for i in range(len(X_nn_train) - sequence_length):
-            X_sequences.append(X_scaled[i:i+sequence_length, :-1])  # Features
-            y_sequences.append(nn_train_tar[i+sequence_length])     # Label (0 or 1)
+            X_sequences.append(X_scaled[i : i + sequence_length, :-1])  # Features
+            y_sequences.append(nn_train_tar[i + sequence_length])  # Label (0 or 1)
 
         X_sequences = np.array(X_sequences)
         y_sequences = np.array(y_sequences)
 
-        X_tensor = torch.tensor(X_sequences, dtype=torch.float32).to(device)  # (num_samples, 50, num_features)
-        y_tensor = torch.tensor(y_sequences, dtype=torch.float32).unsqueeze(1).to(device)  # (num_samples, 1)
+        X_tensor = torch.tensor(X_sequences, dtype=torch.float32).to(
+            device
+        )  # (num_samples, 50, num_features)
+        y_tensor = (
+            torch.tensor(y_sequences, dtype=torch.float32).unsqueeze(1).to(device)
+        )  # (num_samples, 1)
 
         # # Convert to tensors
         # X_tensor = torch.tensor(X_scaled, dtype=torch.float32).to(device)
         # y_tensor = torch.tensor(nn_train_tar.values, dtype=torch.float32).unsqueeze(1).to(device)
 
-        BCmod = LSTMModel(input_dim=X_tensor.shape[2], hidden_dim=64, num_layers=4, dropout=0.5)
+        BCmod = LSTMModel(
+            input_dim=X_tensor.shape[2], hidden_dim=64, num_layers=4, dropout=0.5
+        )
         BCmod.to(device)
 
-
-
-
-        if continuous==True:
+        if continuous == True:
             if c >= 1:
                 print("loading weights")
-                BCmod.load_state_dict(torch.load('model_weights.pth'))
-
+                BCmod.load_state_dict(torch.load("model_weights.pth"))
 
         n_pos = (nn_train_tar == 1).sum()
         n_neg = (nn_train_tar == 0).sum()
 
-        weight = torch.tensor([1 * n_neg/n_pos]).to(device)
+        weight = torch.tensor([1 * n_neg / n_pos]).to(device)
         print(weight)
         criterion = nn.BCEWithLogitsLoss(pos_weight=weight)
         optimizer = optim.Adam(BCmod.parameters(), lr=1e-3, weight_decay=1e-5)
@@ -268,18 +262,14 @@ def walk_forward_c(
             if epoch % 100 == 0:
                 print(f"Epoch {epoch}, Loss: {loss.item():.4f}")
 
-
         if verbose:
             print(f"Testing: {current_train_end} to {current_test_end}")
 
-
-        if continuous==True:
+        if continuous == True:
             print("dumping weights")
-            torch.save(BCmod.state_dict(), 'model_weights.pth')
+            torch.save(BCmod.state_dict(), "model_weights.pth")
 
         X_test = utils.get_features_matrix(df_test)
-
-
 
         X_test = X_test.iloc[:-N]
         X_test_clean = X_test.dropna()
@@ -287,7 +277,6 @@ def walk_forward_c(
 
         y_test = df_test["log_ret"].shift(-N) - df_test["log_ret"]
         y_test = y_test.loc[test_idx]  # Ensure alignment
-
 
         scaler = StandardScaler()
         X_test_zstd = scaler.fit_transform(X_test_clean)
@@ -310,18 +299,16 @@ def walk_forward_c(
         # X_nn_test_extra[y_pred < 0] = 0
         # X_nn_test = np.column_stack([X_nn_test, X_nn_test_extra])
 
-
         log_return = np.log(df_test["close"].shift(-N) / df_test["close"])
         log_return_curr = np.log(df_test["close"].shift(-1) / df_test["close"])
-        
+
         log_return = log_return[:-N]
-        log_return_curr = log_return_curr[:-N] 
+        log_return_curr = log_return_curr[:-N]
         drag = (log_return - log_return_curr) * cost
 
         profitable = (log_return > np.quantile(log_return, 0.8)).astype(int)
         profitable = continuous_signal(profitable, N)
         nn_ground_truth = profitable
-
 
         # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         # optimizer,
@@ -339,15 +326,18 @@ def walk_forward_c(
         y_sequences = []
 
         for i in range(len(X_nn_test) - sequence_length):
-            X_sequences.append(X_scaled_test[i:i+sequence_length, :-1])  # Features
-            y_sequences.append(nn_ground_truth[i+sequence_length])     # Label (0 or 1)
+            X_sequences.append(X_scaled_test[i : i + sequence_length, :-1])  # Features
+            y_sequences.append(nn_ground_truth[i + sequence_length])  # Label (0 or 1)
 
         X_sequences = np.array(X_sequences)
         y_sequences = np.array(y_sequences)
 
-        X_tensor_test = torch.tensor(X_sequences, dtype=torch.float32).to(device)  # (num_samples, 50, num_features)
-        y_tensor_test = torch.tensor(y_sequences, dtype=torch.float32).unsqueeze(1).to(device)
-
+        X_tensor_test = torch.tensor(X_sequences, dtype=torch.float32).to(
+            device
+        )  # (num_samples, 50, num_features)
+        y_tensor_test = (
+            torch.tensor(y_sequences, dtype=torch.float32).unsqueeze(1).to(device)
+        )
 
         # # Convert to tensors
         # X_tensor_test = torch.tensor(X_scaled_test, dtype=torch.float32).to(device).to(device)
@@ -355,14 +345,14 @@ def walk_forward_c(
 
         BCmod.eval()  # set BCmod to evaluation mode
         with torch.no_grad():
-            logits = BCmod(X_tensor_test)            # raw probabilities (between 0 and 1)
+            logits = BCmod(X_tensor_test)  # raw probabilities (between 0 and 1)
             val_loss = criterion(logits, y_tensor_test)
             preds = torch.sigmoid(logits)
 
         preds = preds.cpu().squeeze(-1)
 
         class_chop = 0.6
-        tar_args = np.where(preds.numpy()>class_chop)[0]
+        tar_args = np.where(preds.numpy() > class_chop)[0]
 
         tar = np.zeros(len(df_test))
         tar[:-N][tar_args] = 1
@@ -371,15 +361,17 @@ def walk_forward_c(
         # scheduler.step(val_loss)
         acc = accuracy_score(nn_ground_truth, tar[:-N])
         print(f"testing accuracy: {acc}, testing loss: {val_loss}")
-        print(f"num real hits: {nn_ground_truth[nn_ground_truth==1].size}, num predicted: {np.where(preds>class_chop)[0].size}")
-        c_rep = classification_report(nn_ground_truth, tar[:-N],  zero_division=0, output_dict=True)
-
+        print(
+            f"num real hits: {nn_ground_truth[nn_ground_truth==1].size}, num predicted: {np.where(preds>class_chop)[0].size}"
+        )
+        c_rep = classification_report(
+            nn_ground_truth, tar[:-N], zero_division=0, output_dict=True
+        )
 
         # print("up", up_q)
         # current_signals = pd.DataFrame({"signal": signal})
         # current_signals = current_signals.rolling(N).mean().fillna(0)
-        #current_signals = current_signals.values * tar
-
+        # current_signals = current_signals.values * tar
 
         batch_tar = continuous_signal(tar, N)
         current_signals = pd.DataFrame({"signal": batch_tar})
@@ -396,7 +388,6 @@ def walk_forward_c(
         cl_precission = c_rep["1"]["precision"]
         print(f"class 1 accuracy: {cl_precission}")
         results_list.append(cl_precission)
-
 
         # plot first three tests
 
@@ -416,7 +407,6 @@ def walk_forward_c(
         current_train_end += test_period
         current_test_end += test_period
 
-            
         c = c + 1
         # if c >= 1:
         #     break
@@ -443,12 +433,10 @@ def walk_forward_c(
     #     for res in results_list:
     #         for val in res:
     #             r.append(val)
-        # else:
-        # mod_preds = np.array(results_list)
-        
-    mod_preds = results_list #np.array(r)
-    
+    # else:
+    # mod_preds = np.array(results_list)
 
+    mod_preds = results_list  # np.array(r)
 
     t = []
     t_raw = []
@@ -470,8 +458,5 @@ def walk_forward_c(
 
     df_trading["signal"] = t
     df_trading["raw_signal"] = t_raw
-
-
-
 
     return final_model, mod_preds, raw_signals, unprocessed_signals, df_trading
