@@ -1,5 +1,6 @@
 
 *.html
+*.pth
 model_performance_*
 log.txt
 __pycache__
@@ -7,3 +8,10 @@ __pycache__
 pyrightconfig.json
 #data/*.csv
 test.ipynb
+nn_*
+compound.py
+output.png
+lstm_test.ipynb
+notebook.ipynb
+saved_models/*.pth
+

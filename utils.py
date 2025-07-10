@@ -1,11 +1,17 @@
-#! ~/anaconda3/bin/python
+#! ~/anaconda3/envs/alpha/bin/python
+
 import numpy as np
 import matplotlib.pyplot as plt
 
-from typing import List
+from typing import List, Tuple
 
 import pandas as pd
 import pandas_ta as ta
+
+# pandas performance warning
+import warnings
+
+warnings.simplefilter(action="ignore", category=pd.errors.PerformanceWarning)
 
 
 def suppress_consecutive_repeats(arr):
@@ -22,24 +28,57 @@ def suppress_consecutive_repeats(arr):
     return out
 
 
+def calculate_sharpe(my_ret: np.ndarray):
+
+    if np.all(np.isnan(my_ret)):
+        return np.nan
+
+    std = np.nanstd(my_ret, ddof=1)
+    mean = np.nanmean(my_ret)
+
+    if std == 0:
+        return np.inf
+    return mean / std
+
+
+def calculate_pr(my_ret: np.ndarray):
+
+    pos_sum = np.nansum(my_ret[my_ret > 0])
+    neg_sum = np.nansum(my_ret[my_ret < 0])
+
+    if np.isnan(pos_sum) or np.isnan(neg_sum):
+        profit_ratio = np.nan
+    elif neg_sum == 0:
+        profit_ratio = np.inf if pos_sum > 0 else np.nan  # Avoid divide-by-zero
+    else:
+        profit_ratio = pos_sum / abs(neg_sum)
+    return profit_ratio
+
+
 def compute_returns(
-    df_trading: pd.DataFrame, cost: float = 0.001
-):  # 0.1% transaction cost per unit change in position
+    signal: pd.Series,
+    log_ret: pd.Series,
+    cost: float = 0.00,
+):
 
-    signal = df_trading["signal"]
-    position_change = (
-        signal.diff().abs().fillna(0)
-    )  # First row has no previous position
+    position_change = signal.diff().abs().fillna(0)
+    position_change = np.array(position_change.values)
 
-    next_r = df_trading["log_ret"].shift(-1)
+    next_r = log_ret.shift(-1)
+    next_r = np.array(next_r.values)
+
+    signal = np.array(signal.values)
+
+    if len(signal) == 0 or len(next_r) == 0:
+        return np.full_like(next_r, np.nan), np.nan, np.nan
 
     # Strategy return net of transaction costs
     my_ret = next_r * signal - position_change * cost
 
-    pr = np.nansum(my_ret[my_ret > 0]) / np.abs(np.nansum(my_ret[my_ret < 0]))
-    sharpe = np.nanmean(my_ret.dropna()) / np.nanstd(my_ret.dropna(), ddof=1)
+    sharpe = calculate_sharpe(my_ret)
+    profit_ratio = calculate_pr(my_ret)
 
-    return my_ret, pr, sharpe
+    return my_ret, profit_ratio, sharpe
 
 
 def compute_returns_nn(
@@ -84,7 +123,7 @@ def compute_returns_nn(
     return my_ret, pr, sharpe, trade_signal
 
 
-def compute_win_ratio(signal, log_return, horizon=4):
+def compute_win_ratio(signal, log_return, horizon=4) -> Tuple[float, np.ndarray]:
     trades = []
 
     i = 0
@@ -104,7 +143,7 @@ def compute_win_ratio(signal, log_return, horizon=4):
     return win_ratio, trades
 
 
-def generate_positions(signal, horizon=4):
+def generate_positions(signal, horizon=4) -> np.ndarray:
     signal = np.asarray(signal)
     positions = np.zeros_like(signal)
     i = 0
@@ -120,25 +159,32 @@ def generate_positions(signal, horizon=4):
     return positions
 
 
-def add_mas(df: pd.DataFrame, windows: List[int] | np.ndarray = np.arange(2, 25)):
-
-    if "log_ret" not in df.columns:
-        df["log_ret"] = np.log(df["close"]).diff()
+def add_mas(
+    df: pd.DataFrame, windows: List[int] | np.ndarray = np.arange(2, 25)
+) -> pd.DataFrame:
 
     for window_length in windows:
         df[f"means_{window_length}"] = df["close"].rolling(window_length).mean()
-        df[f"std_{window_length}"] = df["close"].rolling(window_length).std(ddof=1)
+        df[f"std{window_length}"] = df["close"].rolling(window_length).std(ddof=1)
 
     return df
 
 
 def add_rsis(df: pd.DataFrame, windows: List[int] | np.ndarray = np.arange(2, 25)):
 
-    if "log_ret" not in df.columns:
+    for window_length in windows:
+        df[f"rsi_{window_length}"] = ta.rsi(df["close"], length=window_length)
+
+    return df
+
+
+def add_vols(df: pd.DataFrame, windows: List[int] | np.ndarray = np.arange(2, 25)):
+
+    if "log_ret" not in list(df.columns):
         df["log_ret"] = np.log(df["close"]).diff()
 
     for window_length in windows:
-        df[f"rsi_{window_length}"] = ta.rsi(df["close"], length=window_length)
+        df[f"vol_{window_length}"] = df["log_ret"].rolling(window_length).std(ddof=1)
 
     return df
 
@@ -165,6 +211,7 @@ def get_features_names(df: pd.DataFrame) -> List[str]:
             feature_names.append(col)
         if "rsi" in col:
             feature_names.append(col)
+
     return feature_names
 
 

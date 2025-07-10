@@ -9,8 +9,8 @@ client = Client(api_key="", api_secret="")
 
 symbol = "BTCUSDT"
 interval = Client.KLINE_INTERVAL_1HOUR
-start_str = "1 Jan 2020"
-end_str = "23 May 2025"
+start_str = "1 Jan 2023"
+end_str = "04 July 2025"
 
 klines = client.get_historical_klines(symbol, interval, start_str, end_str)
 
